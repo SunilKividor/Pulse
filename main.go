@@ -1,66 +1,117 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/joho/godotenv"
 )
 
-//poll images to SQS
-//then spin up docker containers
+type S3Event struct {
+	Records []Records `json:"Records"`
+}
 
-//sqs-user
-//access-key : AKIAW3MEFI3VVZNI6K6U
-//secret-access-key : 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
+type Records struct {
+	S3Events S3 `json:"s3"`
+}
+
+type S3 struct {
+	SchemaVersion   string   `json:"s3SchemaVersion"`
+	ConfigurationId string   `json:"configurationId"`
+	Bucket          S3Bucket `json:"bucket"`
+	Object          S3Object `json:"object"`
+}
+
+type S3Bucket struct {
+	Name string `json:"name"`
+	ARN  string `json:"arn"`
+}
+
+type S3Object struct {
+	Key       string `json:"key"`
+	Size      int    `json:"size"`
+	ETag      string `json:"eTag"`
+	Sequencer string `json:"sequencer"`
+}
+
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Could not load .env")
+	}
+}
 
 func main() {
-	queryUrl := "https://sqs.us-east-1.amazonaws.com/471112959723/TempRawVideosS3Queue"
-	cfg, err := config.LoadDefaultConfig(
-		context.TODO(),
-		config.WithRegion("us-east-1"),
-		config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider("AKIAW3MEFI3VVZNI6K6U", "R7TComRi/nOVDn7/XjaeGdRy02VP6W8b2LPR3uey", ""),
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	awsSQSRegion := os.Getenv("AWS_SQS_REGION")
+	sqsQueryUrl := os.Getenv("SQS_QUERYURL")
+	//configs
+	config := aws.Config{
+		Credentials: credentials.NewStaticCredentials(
+			awsAccessKey,
+			awsSecretAccessKey,
+			"",
 		),
-	)
-	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		Region: &awsSQSRegion,
 	}
-	sqsClient := sqs.NewFromConfig(cfg)
-
+	//session
+	sess := session.Must(session.NewSessionWithOptions(
+		session.Options{
+			Config: config,
+		},
+	))
+	//sqs
+	sqsClient := sqs.New(sess)
+	receiveMessageInput := sqs.ReceiveMessageInput{
+		QueueUrl:            &sqsQueryUrl,
+		VisibilityTimeout:   aws.Int64(30),
+		WaitTimeSeconds:     aws.Int64(20),
+		MaxNumberOfMessages: aws.Int64(1),
+	}
+	//polling for messages
 	for {
-		output, err := sqsClient.ReceiveMessage(
-			context.Background(),
-			&sqs.ReceiveMessageInput{
-				QueueUrl:            &queryUrl,
-				MaxNumberOfMessages: 1,
-				WaitTimeSeconds:     20,
-			},
-		)
+		result, err := sqsClient.ReceiveMessage(&receiveMessageInput)
 		if err != nil {
-			log.Printf("unable to get messages, %v", err)
+			log.Printf("Error receiving message: %v", err)
 			continue
 		}
-		if !(len(output.Messages) > 0) {
-			log.Println("No messages")
+		if !(len(result.Messages) > 0) {
+			log.Println("No new messages")
 			continue
 		}
-		//validate the msg
-		msg1 := output.Messages[0]
-		var event map[string]interface{}
-		err = json.Unmarshal([]byte(*msg1.Body), &event)
+		message := result.Messages[0]
+		var event S3Event
+		err = json.Unmarshal([]byte(*message.Body), &event)
 		if err != nil {
-			log.Println("error marshalling message body")
+			log.Println("error unmarshalling the json")
 			continue
 		}
-		fmt.Println(event)
+		if !(len(event.Records) > 0) {
+			log.Println("No Records")
+			continue
+		}
+		fmt.Println(event.Records[0].S3Events.Object.Key)
 
-		//spin up the container
-
-		//delete msg from queue
+		//download video from s3
+		s3Client := s3.New(sess)
+		key := event.Records[0].S3Events.Object.Key
+		bucket := event.Records[0].S3Events.Bucket.Name
+		err = downloadFromS3(s3Client, bucket, key)
+		if err != nil {
+			log.Println("Error downloading from s3")
+		}
 	}
+}
+
+func downloadFromS3(s3Client *s3.S3, bucket, key string) error {
+	// fileName := filepath.Base(key)
+	// filePath := filepath.Join("downloads", fileName)
+	return nil
 }

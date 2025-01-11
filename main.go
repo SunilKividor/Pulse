@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/url"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -97,7 +99,6 @@ func main() {
 			log.Println("No Records")
 			continue
 		}
-		fmt.Println(event.Records[0].S3Events.Object.Key)
 
 		//download video from s3
 		s3Client := s3.New(sess)
@@ -105,13 +106,38 @@ func main() {
 		bucket := event.Records[0].S3Events.Bucket.Name
 		err = downloadFromS3(s3Client, bucket, key)
 		if err != nil {
-			log.Println("Error downloading from s3")
+			log.Printf("Error downloading from s3: %s", err.Error())
 		}
 	}
 }
 
 func downloadFromS3(s3Client *s3.S3, bucket, key string) error {
-	// fileName := filepath.Base(key)
-	// filePath := filepath.Join("downloads", fileName)
+	file, err := os.Create(key)
+	if err != nil {
+		log.Printf("error creating file : %s", err.Error())
+		return err
+	}
+	defer file.Close()
+
+	decodedKey, err := url.QueryUnescape(key)
+	if err != nil {
+		log.Printf("error decording key: %s", err.Error())
+		return err
+	}
+
+	getObjectInput := &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &decodedKey,
+	}
+	objectOutput, err := s3Client.GetObject(getObjectInput)
+	if err != nil {
+		log.Printf("could not download the object: %s", err.Error())
+		return err
+	}
+	noOfBytes, err := io.Copy(file, objectOutput.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("no. of bytes copied: %v", noOfBytes)
 	return nil
 }

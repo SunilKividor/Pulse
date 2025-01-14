@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -54,6 +55,7 @@ func main() {
 	awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	awsSQSRegion := os.Getenv("AWS_SQS_REGION")
 	sqsQueryUrl := os.Getenv("SQS_QUERYURL")
+
 	//configs
 	config := aws.Config{
 		Credentials: credentials.NewStaticCredentials(
@@ -63,12 +65,14 @@ func main() {
 		),
 		Region: &awsSQSRegion,
 	}
+
 	//session
 	sess := session.Must(session.NewSessionWithOptions(
 		session.Options{
 			Config: config,
 		},
 	))
+
 	//sqs
 	sqsClient := sqs.New(sess)
 	receiveMessageInput := sqs.ReceiveMessageInput{
@@ -77,6 +81,7 @@ func main() {
 		WaitTimeSeconds:     aws.Int64(20),
 		MaxNumberOfMessages: aws.Int64(1),
 	}
+
 	//polling for messages
 	for {
 		result, err := sqsClient.ReceiveMessage(&receiveMessageInput)
@@ -107,6 +112,13 @@ func main() {
 		err = downloadFromS3(s3Client, bucket, key)
 		if err != nil {
 			log.Printf("Error downloading from s3: %s", err.Error())
+		}
+
+		//ffmpeg video transcoding
+		cmd := exec.Command("ffmpeg", "-i", "input2.mp4", "-b:v", "13000k", "13000-3.mp4")
+		err = cmd.Run()
+		if err != nil {
+			log.Fatalf("%s", err.Error())
 		}
 	}
 }

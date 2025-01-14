@@ -55,6 +55,7 @@ func main() {
 	awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	awsSQSRegion := os.Getenv("AWS_SQS_REGION")
 	sqsQueryUrl := os.Getenv("SQS_QUERYURL")
+	trancodedVideosBucket := os.Getenv("TRANSCODED_VIDEOS_BUCKET")
 
 	//configs
 	config := aws.Config{
@@ -105,20 +106,50 @@ func main() {
 			continue
 		}
 
-		//download video from s3
+		//download video from s3-1
 		s3Client := s3.New(sess)
 		key := event.Records[0].S3Events.Object.Key
 		bucket := event.Records[0].S3Events.Bucket.Name
 		err = downloadFromS3(s3Client, bucket, key)
 		if err != nil {
 			log.Printf("Error downloading from s3: %s", err.Error())
+			continue
 		}
 
 		//ffmpeg video transcoding
-		cmd := exec.Command("ffmpeg", "-i", "input2.mp4", "-b:v", "13000k", "13000-3.mp4")
+		cmd := exec.Command("ffmpeg", "-i", key, "-b:v", "13000k", "13000-3.mp4")
 		err = cmd.Run()
 		if err != nil {
 			log.Fatalf("%s", err.Error())
+		}
+
+		//delete file from s3-1
+		decodedKey, err := url.QueryUnescape(key)
+		if err != nil {
+			log.Fatalf("error decording key: %s", err.Error())
+		}
+		deleteObjectInput := &s3.DeleteObjectInput{
+			Bucket: &bucket,
+			Key:    &decodedKey,
+		}
+		_, err = s3Client.DeleteObject(deleteObjectInput)
+		if err != nil {
+			log.Println("Could not delete the object from s3-2")
+		}
+
+		//upload file to s3-2
+		file, err := os.Open("13000-3.mp4") //name from ffmpeg command
+		if err != nil {
+			log.Fatalf("could not open the transcoded file to upload")
+		}
+		putObjectInput := &s3.PutObjectInput{
+			Bucket: &trancodedVideosBucket,
+			Key:    aws.String("transcoded-video.mp4"),
+			Body:   file,
+		}
+		_, err = s3Client.PutObject(putObjectInput)
+		if err != nil {
+			log.Println("error uploading file to bucket")
 		}
 	}
 }

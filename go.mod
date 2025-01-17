@@ -26,4 +26,5 @@ require (
 	github.com/aws/smithy-go v1.22.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 )

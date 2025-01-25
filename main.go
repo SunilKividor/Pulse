@@ -57,7 +57,6 @@ func main() {
 	awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	awsSQSRegion := os.Getenv("AWS_SQS_REGION")
 	sqsQueryUrl := os.Getenv("SQS_QUERYURL")
-	// trancodedVideosBucket := os.Getenv("TRANSCODED_VIDEOS_BUCKET")
 
 	jobQueueUser := os.Getenv("JOB_QUEUE_USER")
 	jobQueuePassword := os.Getenv("JOB_QUEUE_PASSWORD")
@@ -82,6 +81,7 @@ func main() {
 	))
 
 	//job queue- RABBITMQ
+	fmt.Printf("amqp://%s:%s@%s:%s/", jobQueueUser, jobQueuePassword, jobQueueEc2IP, jobQueuePORT)
 	conn, err := amqp.Dial(fmt.Sprintf("amqp://%s:%s@%s:%s/", jobQueueUser, jobQueuePassword, jobQueueEc2IP, jobQueuePORT))
 	failOnError(err, "Error could not connec to the job")
 	defer conn.Close()

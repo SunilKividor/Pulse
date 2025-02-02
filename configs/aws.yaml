@@ -1,0 +1,5 @@
+aws:
+  access_key: "AKIA2ZIOMUICBBWUGAAK"
+  secret_key: "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"
+  region: "eu-north-1"
+  sqs: "https://sqs.eu-north-1.amazonaws.com/741448917508/TempRawVideosS3Queue"

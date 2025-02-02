@@ -16,7 +16,7 @@ type AwsConfig struct {
 
 func LoadAwsConfig() (*AwsConfig, error) {
 	viper.SetConfigName("aws")
-	viper.AddConfigPath("../configs")
+	viper.AddConfigPath("./configs")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to laod the config: %v", err)
@@ -30,7 +30,7 @@ func LoadAwsConfig() (*AwsConfig, error) {
 	return &cfg, nil
 }
 
-func (awsConfig *AwsConfig) NewAwsSession() (aws.Config, error) {
+func (awsConfig *AwsConfig) NewAwsSession() aws.Config {
 	return aws.Config{
 		Credentials: credentials.NewStaticCredentials(
 			awsConfig.AccessKey,
@@ -38,5 +38,5 @@ func (awsConfig *AwsConfig) NewAwsSession() (aws.Config, error) {
 			"",
 		),
 		Region: &awsConfig.Region,
-	}, nil
+	}
 }

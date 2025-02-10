@@ -10,15 +10,8 @@ import (
 	"github.com/SunilKividor/pkg/utils"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
-func init() {
-	if err := godotenv.Load("../../configs/.env"); err != nil {
-		utils.FailOnError(err, "Could not load .env")
-	}
-}
 
 func main() {
 	awsConfigModel := config.NewAwsConfigModel()

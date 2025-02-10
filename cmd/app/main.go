@@ -13,6 +13,12 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+func init() {
+	if err := godotenv.Load("../../configs/.env"); err != nil {
+		utils.FailOnError(err, "Could not load .env")
+	}
+}
+
 func main() {
 	awsConfigModel := config.NewAwsConfigModel()
 	awsConfig := awsConfigModel.NewAwsConfig()

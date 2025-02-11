@@ -29,16 +29,13 @@ func main() {
 		},
 	))
 
-	//job queue- RABBITMQ
-	jobQueueConfig := queues.NewJobRabbitMQConfig()
-	con := jobQueueConfig.RunServer()
-	ch, err := con.Channel()
+	//job queue server - RABBITMQ
+	jobQueueConfig := queues.NewJobQueueConfig()
+	queueServerConn := jobQueueConfig.RunServer()
+	queueConnChannel, err := queueServerConn.Channel()
 	utils.FailOnError(err, "Channel connection")
-	defer con.Close()
-	defer ch.Close()
-
-	//creating Queue in Job-Queue
-	q := queues.NewJobQueue(ch, "transcoding-jobs")
+	defer queueServerConn.Close()
+	defer queueConnChannel.Close()
 
 	//sqs
 	sqsClient := sqs.New(sess)
@@ -69,15 +66,32 @@ func main() {
 		}
 
 		//publishing job to Job-Queue
-		msg := models.PublishingMessage{
-			BucketName: event.Records[0].S3Events.Bucket.Name,
-			Key:        event.Records[0].S3Events.Object.Key,
+		doneCh := make(chan struct{})
+		confirmChan := make(chan *amqp.DeferredConfirmation)
+		go func() {
+			for {
+				select {
+				case dConf, ok := <-confirmChan:
+					if !ok {
+						log.Println("Confirmation channel closed. Exiting goroutine...")
+						return
+					}
+					log.Println("Received confirmation:", dConf)
+
+				case <-doneCh:
+					log.Println("Received stop signal. Exiting goroutine...")
+					return
+				}
+			}
+		}()
+		msg := queues.NewPublishingMessage(event.Records[0].S3Events.Bucket.Name, event.Records[0].S3Events.Object.Key)
+		publishingMsgCongig := queues.NewPublishingMessageConfig(
+			*msg,
+			confirmChan,
+		)
+		err = publishingMsgCongig.PublishMessage(queueConnChannel)
+		if err == nil {
+			close(doneCh)
 		}
-		msgJson, err := json.Marshal(msg)
-		utils.FailOnError(err, "Error serializing Publishing-message")
-		err = ch.Publish("", q.Name, false, false, amqp.Publishing{
-			Body: []byte(msgJson),
-		})
-		utils.FailOnError(err, "Error Publishing message")
 	}
 }

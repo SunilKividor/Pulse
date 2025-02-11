@@ -28,10 +28,3 @@ type S3Object struct {
 	ETag      string `json:"eTag"`
 	Sequencer string `json:"sequencer"`
 }
-
-//rabbitmq
-
-type PublishingMessage struct {
-	BucketName string `json:"bucket_name"`
-	Key        string `json:"key"`
-}
